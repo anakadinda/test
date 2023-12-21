@@ -1,1 +1,585 @@
-{"nbformat":4,"nbformat_minor":0,"metadata":{"colab":{"provenance":[{"file_id":"1-rh6QirtYxZtAE9ePl5oTioonuwdbkm4","timestamp":1703155767851}],"toc_visible":true,"authorship_tag":"ABX9TyNhiLhwS3leXQNRBGupAm9B"},"kernelspec":{"name":"python3","display_name":"Python 3"},"language_info":{"name":"python"}},"cells":[{"cell_type":"code","source":["# app.py\n","import streamlit as st\n","import pandas as pd\n","from sklearn.linear_model import LinearRegression\n","from sklearn.metrics import mean_squared_error\n","import matplotlib.pyplot as plt\n","\n","# Copy your existing code here\n","\n","def main():\n","    st.title(\"Disk Usage Analysis Dashboard\")\n","\n","    # Add Streamlit components and code here based on your needs\n","\n","    st.sidebar.header(\"Navigation\")\n","    selected_page = st.sidebar.radio(\n","        \"Select Page\", [\"Home\", \"Unit Analysis\", \"Total Analysis\"]\n","    )\n","\n","    if selected_page == \"Home\":\n","        st.header(\"Welcome to the Disk Usage Analysis Dashboard!\")\n","        # Add content for the home page\n","\n","    elif selected_page == \"Unit Analysis\":\n","        st.header(\"Unit Analysis\")\n","\n","    # Import Library\n","\n","    import matplotlib.pyplot as plt\n","    import numpy as np\n","    import pandas as pd\n","    import statsmodels.api as sm\n","    import warnings\n","    #import skfuzzy as fuzz\n","\n","    warnings.filterwarnings('ignore')\n","\n","    from pandas.plotting import lag_plot\n","    from sklearn.metrics import mean_squared_error\n","    from sklearn.metrics import mean_absolute_error\n","    from statsmodels.tools.eval_measures import mse, rmse,meanabs\n","    from statsmodels.graphics.tsaplots import  month_plot,quarter_plot\n","    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf\n","    from statsmodels.tsa.ar_model import AR, ARResults\n","    from statsmodels.tsa.holtwinters import ExponentialSmoothing\n","    from statsmodels.tsa.seasonal import  seasonal_decompose\n","    from statsmodels.tsa.statespace.sarimax import SARIMAX\n","    from statsmodels.tsa.statespace.tools import diff\n","    from statsmodels.tsa.stattools import acovf, acf, pacf,pacf_yw,pacf_ols\n","    from statsmodels.tsa.stattools import adfuller\n","    #from skfuzzy import control as ctrl\n","\n","    %matplotlib inline\n","\n","    # Import Library\n","    import pandas as pd\n","    import matplotlib.pyplot as plt\n","    import numpy as np\n","    from sklearn.metrics import davies_bouldin_score\n","    from sklearn.cluster import KMeans\n","\n","    # Baca data dari file Excel\n","    df = pd.read_excel('/content/drive/MyDrive/Colab Notebooks/data_raw_2_tahun.xlsx')\n","\n","    # Menampilkan contoh data\n","    #print(df.head())\n","\n","    # Menampilkan kolom data\n","    #print(df.columns)\n","\n","    # List semua kolom iops\n","    kolom_write_iops = df.filter(like='Sum of Datastore|Write IOPS').columns\n","    kolom_read_iops = df.filter(like='Sum of Datastore|Read IOPS').columns\n","    # List semua kolom disk\n","    kolom_disk_space = df.filter(like='Sum of Disk Space|Provisioned Space for VM (GB)').columns\n","    kolom_disk_used = df.filter(like='disk used').columns\n","\n","    # Menambahkan kolom-kolom baru dengan nilai rata-ratanya\n","    df['Rata-rata Write IOPS'] = df[kolom_write_iops].mean(axis=1)\n","    df['Rata-rata Read IOPS'] = df[kolom_read_iops].mean(axis=1)\n","    df['Rata-rata Disk Space'] = df[kolom_disk_space].mean(axis=1)\n","    df['Rata-rata Disk Used'] = df[kolom_disk_used].mean(axis=1)\n","\n","    # Menghasilkan DataFrame baru hanya dengan kolom yang diinginkan\n","    data_unit_disk_space_iops = df[['Unit', 'Rata-rata Write IOPS', 'Rata-rata Read IOPS', 'Rata-rata Disk Space', 'Rata-rata Disk Used']]\n","\n","    # Menampilkan beberapa baris pertama DataFrame baru\n","    #print(data_unit_disk_space_iops.head())\n","\n","    ### Grouping Data By MEAN\n","\n","    # Mengelompokkan data berdasarkan kolom 'Unit' dan menghitung rata-rata\n","    data_unit_disk_space_iops_grouped = data_unit_disk_space_iops.groupby('Unit').mean().reset_index()\n","\n","    # Menampilkan hasil pengelompokkan\n","    print(data_unit_disk_space_iops_grouped)\n","\n","    #######################################################\n","\n","    # Menentukan jumlah kluster yang diinginkan dengan metode elbow\n","    max_clusters = 10\n","    inertia = []\n","\n","    # Melakukan pengelompokkan menggunakan KMeans untuk setiap jumlah kluster\n","    for k in range(1, max_clusters + 1):\n","        kmeans = KMeans(n_clusters=k)\n","        kmeans.fit(data_unit_disk_space_iops_grouped[['Rata-rata Write IOPS', 'Rata-rata Read IOPS']])\n","        inertia.append(kmeans.inertia_)\n","\n","    # Plot nilai inersia untuk menemukan elbow\n","    plt.plot(range(1, max_clusters + 1), inertia, marker='o')\n","    plt.xlabel('Jumlah Kluster')\n","    plt.ylabel('Inersia')\n","    plt.title('Metode Elbow untuk Menentukan Jumlah Kluster Optimal')\n","    plt.show()\n","\n","    ####################################################\n","\n","    for optimal_clusters in range(2, max_clusters + 1):\n","        # Memilih kolom-kolom yang akan digunakan untuk analisis KMeans\n","        features_kmeans = ['Rata-rata Disk Space', 'Rata-rata Disk Used']\n","        data_kmeans = data_unit_disk_space_iops_grouped[features_kmeans]\n","\n","        # Melakukan pengelompokkan menggunakan KMeans\n","        kmeans = KMeans(n_clusters=optimal_clusters)\n","        kmeans.fit(data_kmeans)\n","\n","        # Menambahkan kolom klaster ke DataFrame\n","        data_unit_disk_space_iops_grouped['klaster'] = kmeans.labels_\n","\n","        # Mengambil nilai centroid\n","        centroids = kmeans.cluster_centers_\n","\n","        # Visualisasi hasil pengelompokkan berdasarkan klaster baru\n","        plt.scatter(data_unit_disk_space_iops_grouped['Rata-rata Disk Space'], data_unit_disk_space_iops_grouped['Rata-rata Disk Used'], c=data_unit_disk_space_iops_grouped['klaster'], cmap='viridis', label='Data Points')\n","        plt.scatter(centroids[:, 0], centroids[:, 1], marker='x', color='red', label='Centroids')\n","        plt.xlabel('Rata-rata Disk Space')\n","        plt.ylabel('Rata-rata Disk Used')\n","        plt.colorbar(label='Klaster')\n","        plt.legend()\n","        plt.title(f'Visualisasi Rata-rata Disk Space dan Rata-rata Disk Used dengan KMeans Centroids (Kluster = {optimal_clusters})')\n","        plt.show()\n","\n","        # Menyimpan hasil klaster ke file CSV dengan nama yang mencakup jumlah kluster optimal\n","        output_file_name = f'/content/drive/MyDrive/Colab Notebooks/hasil_klaster_disk_space_{optimal_clusters}.csv'\n","        data_unit_disk_space_iops_grouped.to_csv(output_file_name, index=False)\n","\n","        # Menghitung Davies Bouldin Score\n","        dbi_score = davies_bouldin_score(data_kmeans, data_unit_disk_space_iops_grouped['klaster'])\n","        print(f'Davies Bouldin Score untuk {optimal_clusters} kluster:', dbi_score)\n","\n","\n","    ############################################################\n","\n","    for optimal_clusters in range(2, max_clusters + 1):\n","        # Memilih kolom-kolom yang akan digunakan untuk analisis KMeans\n","        features_kmeans = ['Rata-rata Write IOPS', 'Rata-rata Read IOPS']\n","        data_kmeans = data_unit_disk_space_iops_grouped[features_kmeans]\n","\n","        # Melakukan pengelompokkan menggunakan KMeans\n","        kmeans = KMeans(n_clusters=optimal_clusters)\n","        kmeans.fit(data_kmeans)\n","\n","        # Menambahkan kolom klaster ke DataFrame\n","        data_unit_disk_space_iops_grouped['klaster'] = kmeans.labels_\n","\n","        # Mengambil nilai centroid\n","        centroids = kmeans.cluster_centers_\n","\n","        # Visualisasi hasil pengelompokkan berdasarkan klaster baru\n","        plt.scatter(data_unit_disk_space_iops_grouped['Rata-rata Write IOPS'], data_unit_disk_space_iops_grouped['Rata-rata Read IOPS'], c=data_unit_disk_space_iops_grouped['klaster'], cmap='viridis', label='Data Points')\n","        plt.scatter(centroids[:, 0], centroids[:, 1], marker='x', color='red', label='Centroids')\n","        plt.xlabel('Rata-rata Write IOPS')\n","        plt.ylabel('Rata-rata Read IOPS')\n","        plt.colorbar(label='Klaster')\n","        plt.legend()\n","        plt.title(f'Visualisasi Rata-rata Write IOPS dan Rata-rata Read IOPS dengan KMeans Centroids (Kluster = {optimal_clusters})')\n","        plt.show()\n","\n","        # Menyimpan hasil klaster ke file CSV dengan nama yang mencakup jumlah kluster optimal\n","        output_file_name = f'/content/drive/MyDrive/Colab Notebooks/hasil_klaster_disk_space_iops_{optimal_clusters}.csv'\n","        data_unit_disk_space_iops_grouped.to_csv(output_file_name, index=False)\n","\n","        # Menghitung Davies Bouldin Score\n","        dbi_score = davies_bouldin_score(data_kmeans, data_unit_disk_space_iops_grouped['klaster'])\n","        print(f'Davies Bouldin Score untuk {optimal_clusters} kluster:', dbi_score)\n","\n","\n","    ##############################################################\n","\n","    ## Grouping per Unit\n","\n","    # Baca data dari file Excel\n","    df = pd.read_excel('/content/drive/MyDrive/Colab Notebooks/data_raw_2_tahun.xlsx')\n","\n","    # Hapus spasi ekstra dari nama kolom\n","    df.columns = df.columns.str.strip()\n","\n","    # Hapus kolom 'Nomor', 'Nama Aplikasi', 'URL', dan 'Hostname'\n","    df = df.drop(['Nomor', 'Nama Aplikasi', 'URL', 'Hostname'], axis=1)\n","\n","    # Hapus kolom yang memiliki awalan 'Sum of Datastore|Write IOPS' atau 'Sum of Datastore|Read IOPS'\n","    df = df.drop(df.filter(like='Sum of Datastore|Write IOPS').columns, axis=1)\n","    df = df.drop(df.filter(like='Sum of Datastore|Read IOPS').columns, axis=1)\n","\n","    # Ganti nama kolom dengan awalan 'Sum of Disk Space|Provisioned Space for VM (GB)'\n","    df = df.rename(columns=lambda x: 'Total Disk Space' if 'Sum of Disk Space|Provisioned Space for VM (GB)' in x else x)\n","\n","    # Ganti nama kolom dengan awalan 'disk used'\n","    df = df.rename(columns=lambda x: 'Total Disk Used' if 'disk used' in x else x)\n","\n","    # Mengelompokkan berdasarkan 'Unit' tanpa melakukan agregasi\n","    grouped_df = df.groupby('Unit').sum().reset_index()\n","\n","    # Menampilkan beberapa baris pertama DataFrame setelah mengelompokkan\n","    #print(grouped_df.head())\n","\n","    # Menyimpan DataFrame ke dalam file CSV\n","    grouped_df.to_csv('/content/drive/MyDrive/Colab Notebooks/grouped_data.csv', index=False)\n","\n","    ## Membuat FIle CSV Unit Loop Untuk Total Disk Used & Prediction\n","\n","    import pandas as pd\n","    import matplotlib.pyplot as plt\n","    from statsmodels.tsa.holtwinters import ExponentialSmoothing\n","    from sklearn.metrics import mean_squared_error\n","\n","    # List untuk menyimpan hasil RMSE dan Mean\n","    rmse_results = []\n","    mean_results = []\n","\n","    # DataFrame untuk menyimpan hasil RMSE tiap unit\n","    rmse_df = pd.DataFrame(columns=['Unit', 'RMSE'])\n","\n","    # Loop untuk setiap Unit\n","    for idx, unit_name in enumerate(grouped_df['Unit']):\n","        # Mengambil data kolom ganjil untuk baris pertama mulai dari kolom ketiga\n","        odd_columns_data = grouped_df.iloc[idx, 2::2]  # Mulai dari indeks 2 (kolom ketiga), langkah 2\n","\n","        # Menyimpan data ke dalam file dengan nama Unit\n","        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'\n","        odd_columns_data.to_csv(file_name, index=False)\n","\n","        # Membaca kembali file CSV\n","        df_revised = pd.read_csv(file_name)\n","\n","        # Mengganti nama kolom pertama dengan 'Total Disk Used'\n","        df_revised.columns.values[0] = 'Total Disk Used'\n","\n","        # Menyimpan kembali file CSV dengan nama kolom yang sudah diganti\n","        df_revised.to_csv(file_name, index=False)\n","\n","        # Baca data dari file CSV yang telah direvisi\n","        df_revised = pd.read_csv(file_name)\n","\n","        # Tambahkan kolom baru dengan nilai yang sesuai\n","        df_revised['Date'] = pd.date_range(start='20220101', periods=len(df_revised), freq='MS').strftime('%Y%m%d')\n","\n","        # Pindahkan kolom 'Date' ke sebelah kiri\n","        df_revised = df_revised[['Date'] + [col for col in df_revised if col != 'Date']]\n","\n","        # Menyimpan DataFrame kembali ke dalam file CSV\n","        df_revised.to_csv(file_name, index=False)\n","\n","        # Pesan selesai setelah loop selesai\n","        print(f\"Selesai {unit_name}\")\n","\n","        # Membaca kembali file CSV\n","        df_revised = pd.read_csv(file_name, index_col='Date', parse_dates=True, skiprows=0)\n","\n","        # Menggunakan values untuk mendapatkan array satu dimensi\n","        train = df_revised.iloc[0:13]\n","        test = df_revised.iloc[12:]\n","\n","        fitted_model = ExponentialSmoothing(train['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()\n","\n","        test_predictions_hw = fitted_model.forecast(steps=12)\n","\n","        # Membuat DataFrame Pandas dari array NumPy\n","        predictions_df = pd.DataFrame({\n","            'Date': pd.date_range(start='2023-01-01', periods=12, freq='MS'),\n","            'Predictions': test_predictions_hw\n","        })\n","\n","        # Hitung RMSE\n","        error_hw = mean_squared_error(test['Total Disk Used'], test_predictions_hw, squared=False)\n","        rmse_results.append(error_hw)\n","\n","        # Hitung Mean\n","        mean_value = test['Total Disk Used'].mean()\n","        mean_results.append(mean_value)\n","        print(f\"Hasil RMSE untuk {unit_name}: {error_hw}\")\n","        print(f\"Mean untuk {unit_name}: {mean_value}\")\n","\n","        # Menambahkan hasil RMSE ke DataFrame\n","        rmse_df = rmse_df.append({'Unit': unit_name, 'RMSE': error_hw}, ignore_index=True)\n","\n","        # Plotting train, test, dan predictions\n","        plt.figure(figsize=(14, 8))\n","        plt.plot(train.index, train['Total Disk Used'], label='Train')\n","        plt.plot(test.index, test['Total Disk Used'], label='Test')\n","        plt.plot(predictions_df['Date'], predictions_df['Predictions'], label='Predictions')\n","        plt.xlabel('Date')\n","        plt.ylabel('Total Disk Used')\n","        plt.legend()\n","        plt.title(f'Holt-Winters Forecast for {unit_name}')\n","\n","        # Menyimpan plot ke file gambar\n","        plt.savefig(f'/content/drive/MyDrive/Colab Notebooks/Predictions_Plot_{unit_name}.png')\n","        plt.close()\n","\n","        # Menyimpan hasil prediksi ke dalam file CSV\n","        predictions_df.to_csv(f'/content/drive/MyDrive/Colab Notebooks/Predictions_{unit_name}.csv', index=False)\n","\n","    # Menyimpan hasil RMSE tiap unit ke dalam satu file CSV\n","    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/Holt_RMSE_results.csv'\n","    rmse_df.to_csv(rmse_csv_file, index=False)\n","    print(f'Hasil RMSE tiap unit disimpan di: {rmse_csv_file}')\n","\n","\n","    ###################################################################\n","\n","    # Membaca kembali file CSV untuk setiap unit\n","    unit_dfs = []\n","    for unit_name in grouped_df['Unit']:\n","        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'\n","        unit_df = pd.read_csv(file_name, index_col='Date', parse_dates=True)\n","        unit_dfs.append(unit_df)\n","\n","    # Gabungkan data dari semua unit\n","    total_df = pd.concat(unit_dfs, axis=1).sum(axis=1).to_frame(name='Total Disk Used')\n","\n","    #print(total_df)\n","\n","    ## Membagi Data menjadi Training dan Testing\n","\n","    # Menentukan indeks untuk pemisahan data training dan testing\n","    split_index = int(len(total_df) * 0.5)  # Misalnya, menggunakan 80% data untuk training\n","\n","    # Memisahkan data menjadi training dan testing\n","    train_total = total_df.iloc[:split_index]\n","    test_total = total_df.iloc[split_index:]\n","\n","    ## Membuat Model dan Melakukan Prediksi pada Data Training\n","\n","    # Membuat model dan melakukan prediksi pada data training\n","    final_model = ExponentialSmoothing(train_total['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()\n","    train_predictions = final_model.fittedvalues\n","\n","    ## Melakukan Prediksi pada Data Testing\n","\n","    # Melakukan prediksi pada data testing\n","    test_predictions = final_model.forecast(steps=len(test_total))\n","\n","    ## Menyimpan Hasil Prediksi Data Training dan Testing\n","\n","    # Membuat DataFrame Pandas dari array NumPy untuk data training\n","    train_predictions_df = pd.DataFrame({\n","        'Date': train_total.index,\n","        'Predictions': train_predictions\n","    })\n","\n","    # Menyimpan hasil prediksi data training ke dalam file CSV\n","    train_predictions_df.to_csv('/content/drive/MyDrive/Colab Notebooks/Train_Predictions_Total_Unit.csv', index=False)\n","\n","    # Membuat DataFrame Pandas dari array NumPy untuk data testing\n","    test_predictions_df = pd.DataFrame({\n","        'Date': test_total.index,\n","        'Predictions': test_predictions\n","    })\n","\n","    # Menyimpan hasil prediksi data testing ke dalam file CSV\n","    test_predictions_df.to_csv('/content/drive/MyDrive/Colab Notebooks/Test_Predictions_Total_Unit.csv', index=False)\n","\n","    ## Menampilkan Plot Data Training dan Testing\n","\n","    # Plotting data training dan testing\n","    plt.figure(figsize=(14, 8))\n","    plt.plot(train_total.index, train_total['Total Disk Used'], label='Train')\n","    plt.plot(test_total.index, test_total['Total Disk Used'], label='Test')\n","    plt.plot(train_predictions_df['Date'], train_predictions_df['Predictions'], label='Train Predictions')\n","    plt.plot(test_predictions_df['Date'], test_predictions_df['Predictions'], label='Test Predictions')\n","    plt.xlabel('Date')\n","    plt.ylabel('Total Disk Used')\n","    plt.legend()\n","    plt.title('Holt-Winters Forecast for Total Unit')\n","    plt.show()\n","\n","    ## Membuat Model Dan Prediksi\n","\n","    # Membuat model dan melakukan prediksi\n","    final_model = ExponentialSmoothing(total_df['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()\n","    forecast_predictions = final_model.forecast(steps=12)\n","\n","    # Menghitung RMSE\n","    rmse_total = np.sqrt(mean_squared_error(test_total['Total Disk Used'], forecast_predictions))\n","    print(f\"Hasil RMSE untuk Total Unit: {rmse_total}\")\n","\n","    # Menambahkan perhitungan mean\n","    mean_total = total_df['Total Disk Used'].mean()\n","    print(f\"Mean dari Total Disk Used: {mean_total}\")\n","\n","    ## Menyimpan hasil prediksi total unit ke dalam DataFrame dan file CSV\n","\n","    # Membuat DataFrame Pandas dari array NumPy\n","    forecast_df_total = pd.DataFrame({\n","        'Date': pd.date_range(start='2024-01-01', periods=12, freq='MS'),\n","        'Predictions': forecast_predictions\n","    })\n","\n","    # Menyimpan hasil prediksi total unit ke dalam file CSV\n","    forecast_df_total.to_csv('/content/drive/MyDrive/Colab Notebooks/Predictions_Total_Unit.csv', index=False)\n","\n","    ## Plot Prediksi\n","\n","    # Plotting total unit\n","    plt.figure(figsize=(14, 8))\n","    total_df.plot(legend=True, label='Actual', figsize=(14, 8))\n","    forecast_df_total.set_index('Date')['Predictions'].plot(legend=True, label='Holt Winters Forecast 1 year')\n","    plt.xlabel('Date')\n","    plt.ylabel('Total Disk Used')\n","    plt.title('Holt-Winters Forecast for Total Unit')\n","    plt.savefig('/content/drive/MyDrive/Colab Notebooks/Predictions_Plot_Total_Unit.png')\n","    plt.show()\n","\n","    #############################################################\n","\n","    import pandas as pd\n","    from sklearn.linear_model import LinearRegression\n","    from sklearn.metrics import mean_squared_error\n","    import matplotlib.pyplot as plt\n","\n","    # List untuk menyimpan hasil prediksi, RMSE, dan rumus regresi\n","    results_list = []\n","\n","    # DataFrame untuk menyimpan hasil RMSE tiap unit\n","    rmse_df = pd.DataFrame(columns=['Unit', 'Regresi RMSE'])\n","\n","    # Loop untuk setiap Unit\n","    for idx, unit_name in enumerate(grouped_df['Unit']):\n","        # Membaca data dari file CSV\n","        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'\n","        df = pd.read_csv(file_name)\n","\n","        # Tambahkan kolom 'Month' sebagai variabel independen (X)\n","        df['Month'] = range(1, len(df) + 1)\n","\n","        # Pisahkan variabel independen (X) dan variabel dependen (y)\n","        X = df[['Month']]\n","        y = df['Total Disk Used']\n","\n","        # Inisialisasi model regresi linear\n","        model = LinearRegression()\n","\n","        # Melatih model menggunakan data\n","        model.fit(X, y)\n","\n","        # Membuat DataFrame untuk prediksi 12 bulan ke depan\n","        next_months = pd.DataFrame({'Month': range(len(df) + 1, len(df) + 13)})\n","        predictions = model.predict(next_months)\n","\n","        # Menambahkan hasil prediksi ke DataFrame\n","        next_months['Total Disk Used Prediction'] = predictions\n","\n","        # Hitung RMSE\n","        rmse_value = mean_squared_error(y, model.predict(X), squared=False)\n","\n","        # Menyimpan hasil RMSE ke DataFrame\n","        rmse_df = rmse_df.append({'Unit': unit_name, 'Regresi RMSE': rmse_value}, ignore_index=True)\n","\n","        # Simpan hasil prediksi, RMSE, dan rumus regresi ke dalam list\n","        results_list.append({\n","            'unit_name': unit_name,\n","            'predictions': predictions,\n","            'rmse': rmse_value,\n","            'regression_formula': f'y = {model.coef_[0]:.2f} * x + {model.intercept_:.2f}'\n","        })\n","\n","        # Plotting data dan regresi linear\n","        plt.scatter(df['Month'], y, label='Actual Data')\n","        plt.plot(df['Month'], model.predict(X), color='red', label='Linear Regression')\n","        plt.scatter(next_months['Month'], predictions, color='green', marker='x', label='Predictions for Next 12 Months')\n","        plt.xlabel('Month')\n","        plt.ylabel('Total Disk Used')\n","        plt.legend()\n","        plt.title(f'Linear Regression for {unit_name}')\n","        plt.show()\n","\n","        # Simpan DataFrame yang berisi prediksi ke CSV\n","        predictions_csv_file = f'/content/drive/MyDrive/Colab Notebooks/Predictions Regresi {unit_name}.csv'\n","        next_months.to_csv(predictions_csv_file, index=False)\n","\n","    # Menyimpan hasil RMSE tiap unit ke dalam satu file CSV\n","    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/RMSE_Results_Regresi.csv'\n","    rmse_df.to_csv(rmse_csv_file, index=False)\n","    print(f'Hasil RMSE tiap unit disimpan di: {rmse_csv_file}')\n","\n","    # Menampilkan hasil prediksi, RMSE, dan rumus regresi untuk setiap unit\n","    for result in results_list:\n","        print(f'Prediksi Total Disk Used untuk {result[\"unit_name\"]}: {result[\"predictions\"]}')\n","        print(f'RMSE untuk {result[\"unit_name\"]}: {result[\"rmse\"]}')\n","        print(f'Rumus Regresi untuk {result[\"unit_name\"]}: {result[\"regression_formula\"]}')\n","\n","\n","    #############################################################\n","\n","    import pandas as pd\n","    from sklearn.linear_model import LinearRegression\n","    from sklearn.metrics import mean_squared_error\n","    import matplotlib.pyplot as plt\n","\n","    # Tambahkan kolom 'Month' sebagai variabel independen (X)\n","    total_df['Month'] = range(1, len(total_df) + 1)\n","\n","    # Pisahkan variabel independen (X) dan variabel dependen (y)\n","    X = total_df[['Month']]\n","    y = total_df['Total Disk Used']\n","\n","    # Inisialisasi model regresi linear\n","    model = LinearRegression()\n","\n","    # Melatih model menggunakan data\n","    model.fit(X, y)\n","\n","    # Membuat DataFrame untuk prediksi 12 bulan ke depan\n","    next_months = pd.DataFrame({'Month': range(len(total_df) + 1, len(total_df) + 13)})\n","\n","    # Menggunakan indeks dari bulan terakhir pada total_df\n","    last_month = total_df.index.max()\n","    next_months.index = pd.date_range(start=last_month + pd.DateOffset(months=1), periods=12, freq='MS')\n","\n","    # Melakukan prediksi\n","    next_months['Total Disk Used Prediction'] = model.predict(next_months[['Month']])\n","\n","    # Hitung RMSE\n","    rmse_value = mean_squared_error(y, model.predict(X), squared=False)\n","\n","    # Simpan hasil RMSE ke DataFrame\n","    rmse_df = pd.DataFrame({'Unit': ['Total'], 'Regresi RMSE': [rmse_value]})\n","\n","    # Plotting data dan regresi linear\n","    plt.scatter(total_df.index, y, label='Actual Data')\n","    plt.plot(total_df.index, model.predict(X), color='red', label='Linear Regression')\n","    plt.scatter(next_months.index, next_months['Total Disk Used Prediction'], color='green', marker='x', label='Predictions for Next 12 Months')\n","    plt.xlabel('Date')\n","    plt.ylabel('Total Disk Used')\n","    plt.legend()\n","    plt.title('Linear Regression for Total Data')\n","    plt.show()\n","\n","    # Menampilkan hasil prediksi, RMSE, dan rumus regresi\n","    print(f'Prediksi Total Disk Used:\\n{next_months}')\n","    print(f'RMSE untuk Total Data: {rmse_value}')\n","    print(f'Rumus Regresi untuk Total Data: y = {model.coef_[0]:.2f} * x + {model.intercept_:.2f}')\n","\n","    # Menyimpan hasil RMSE ke dalam satu file CSV\n","    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/RMSE_Results_Total_Regresi.csv'\n","    rmse_df.to_csv(rmse_csv_file, index=False)\n","    print(f'Hasil RMSE disimpan di: {rmse_csv_file}')\n","\n","    # Simpan hasil prediksi ke dalam file CSV\n","    predictions_csv_file = '/content/drive/MyDrive/Colab Notebooks/Predictions_Regresi_Total.csv'\n","    next_months.to_csv(predictions_csv_file, index=False)\n","    print(f'Hasil prediksi disimpan di: {predictions_csv_file}')\n","\n","\n","        # Add content for unit analysis\n","\n","    elif selected_page == \"Total Analysis\":\n","        st.header(\"Total Analysis\")\n","\n","        # Add content for total analysis\n","\n","if __name__ == \"__main__\":\n","    main()\n"],"metadata":{"id":"XNCAvqi9PE1n"},"execution_count":null,"outputs":[]}]}
+# -*- coding: utf-8 -*-
+"""app.py
+
+Automatically generated by Colaboratory.
+
+Original file is located at
+    https://colab.research.google.com/drive/18Xhjrb9N_eU2W05F0TwoNog5LwsV_AOH
+"""
+
+# Commented out IPython magic to ensure Python compatibility.
+# app.py
+import streamlit as st
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+# Copy your existing code here
+
+def main():
+    st.title("Disk Usage Analysis Dashboard")
+
+    # Add Streamlit components and code here based on your needs
+
+    st.sidebar.header("Navigation")
+    selected_page = st.sidebar.radio(
+        "Select Page", ["Home", "Unit Analysis", "Total Analysis"]
+    )
+
+    if selected_page == "Home":
+        st.header("Welcome to the Disk Usage Analysis Dashboard!")
+        # Add content for the home page
+
+    elif selected_page == "Unit Analysis":
+        st.header("Unit Analysis")
+
+    # Import Library
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import statsmodels.api as sm
+    import warnings
+    #import skfuzzy as fuzz
+
+    warnings.filterwarnings('ignore')
+
+    from pandas.plotting import lag_plot
+    from sklearn.metrics import mean_squared_error
+    from sklearn.metrics import mean_absolute_error
+    from statsmodels.tools.eval_measures import mse, rmse,meanabs
+    from statsmodels.graphics.tsaplots import  month_plot,quarter_plot
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+    from statsmodels.tsa.ar_model import AR, ARResults
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from statsmodels.tsa.seasonal import  seasonal_decompose
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+    from statsmodels.tsa.statespace.tools import diff
+    from statsmodels.tsa.stattools import acovf, acf, pacf,pacf_yw,pacf_ols
+    from statsmodels.tsa.stattools import adfuller
+    #from skfuzzy import control as ctrl
+
+#     %matplotlib inline
+
+    # Import Library
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from sklearn.metrics import davies_bouldin_score
+    from sklearn.cluster import KMeans
+
+    # Baca data dari file Excel
+    df = pd.read_excel('/content/drive/MyDrive/Colab Notebooks/data_raw_2_tahun.xlsx')
+
+    # Menampilkan contoh data
+    #print(df.head())
+
+    # Menampilkan kolom data
+    #print(df.columns)
+
+    # List semua kolom iops
+    kolom_write_iops = df.filter(like='Sum of Datastore|Write IOPS').columns
+    kolom_read_iops = df.filter(like='Sum of Datastore|Read IOPS').columns
+    # List semua kolom disk
+    kolom_disk_space = df.filter(like='Sum of Disk Space|Provisioned Space for VM (GB)').columns
+    kolom_disk_used = df.filter(like='disk used').columns
+
+    # Menambahkan kolom-kolom baru dengan nilai rata-ratanya
+    df['Rata-rata Write IOPS'] = df[kolom_write_iops].mean(axis=1)
+    df['Rata-rata Read IOPS'] = df[kolom_read_iops].mean(axis=1)
+    df['Rata-rata Disk Space'] = df[kolom_disk_space].mean(axis=1)
+    df['Rata-rata Disk Used'] = df[kolom_disk_used].mean(axis=1)
+
+    # Menghasilkan DataFrame baru hanya dengan kolom yang diinginkan
+    data_unit_disk_space_iops = df[['Unit', 'Rata-rata Write IOPS', 'Rata-rata Read IOPS', 'Rata-rata Disk Space', 'Rata-rata Disk Used']]
+
+    # Menampilkan beberapa baris pertama DataFrame baru
+    #print(data_unit_disk_space_iops.head())
+
+    ### Grouping Data By MEAN
+
+    # Mengelompokkan data berdasarkan kolom 'Unit' dan menghitung rata-rata
+    data_unit_disk_space_iops_grouped = data_unit_disk_space_iops.groupby('Unit').mean().reset_index()
+
+    # Menampilkan hasil pengelompokkan
+    print(data_unit_disk_space_iops_grouped)
+
+    #######################################################
+
+    # Menentukan jumlah kluster yang diinginkan dengan metode elbow
+    max_clusters = 10
+    inertia = []
+
+    # Melakukan pengelompokkan menggunakan KMeans untuk setiap jumlah kluster
+    for k in range(1, max_clusters + 1):
+        kmeans = KMeans(n_clusters=k)
+        kmeans.fit(data_unit_disk_space_iops_grouped[['Rata-rata Write IOPS', 'Rata-rata Read IOPS']])
+        inertia.append(kmeans.inertia_)
+
+    # Plot nilai inersia untuk menemukan elbow
+    plt.plot(range(1, max_clusters + 1), inertia, marker='o')
+    plt.xlabel('Jumlah Kluster')
+    plt.ylabel('Inersia')
+    plt.title('Metode Elbow untuk Menentukan Jumlah Kluster Optimal')
+    plt.show()
+
+    ####################################################
+
+    for optimal_clusters in range(2, max_clusters + 1):
+        # Memilih kolom-kolom yang akan digunakan untuk analisis KMeans
+        features_kmeans = ['Rata-rata Disk Space', 'Rata-rata Disk Used']
+        data_kmeans = data_unit_disk_space_iops_grouped[features_kmeans]
+
+        # Melakukan pengelompokkan menggunakan KMeans
+        kmeans = KMeans(n_clusters=optimal_clusters)
+        kmeans.fit(data_kmeans)
+
+        # Menambahkan kolom klaster ke DataFrame
+        data_unit_disk_space_iops_grouped['klaster'] = kmeans.labels_
+
+        # Mengambil nilai centroid
+        centroids = kmeans.cluster_centers_
+
+        # Visualisasi hasil pengelompokkan berdasarkan klaster baru
+        plt.scatter(data_unit_disk_space_iops_grouped['Rata-rata Disk Space'], data_unit_disk_space_iops_grouped['Rata-rata Disk Used'], c=data_unit_disk_space_iops_grouped['klaster'], cmap='viridis', label='Data Points')
+        plt.scatter(centroids[:, 0], centroids[:, 1], marker='x', color='red', label='Centroids')
+        plt.xlabel('Rata-rata Disk Space')
+        plt.ylabel('Rata-rata Disk Used')
+        plt.colorbar(label='Klaster')
+        plt.legend()
+        plt.title(f'Visualisasi Rata-rata Disk Space dan Rata-rata Disk Used dengan KMeans Centroids (Kluster = {optimal_clusters})')
+        plt.show()
+
+        # Menyimpan hasil klaster ke file CSV dengan nama yang mencakup jumlah kluster optimal
+        output_file_name = f'/content/drive/MyDrive/Colab Notebooks/hasil_klaster_disk_space_{optimal_clusters}.csv'
+        data_unit_disk_space_iops_grouped.to_csv(output_file_name, index=False)
+
+        # Menghitung Davies Bouldin Score
+        dbi_score = davies_bouldin_score(data_kmeans, data_unit_disk_space_iops_grouped['klaster'])
+        print(f'Davies Bouldin Score untuk {optimal_clusters} kluster:', dbi_score)
+
+
+    ############################################################
+
+    for optimal_clusters in range(2, max_clusters + 1):
+        # Memilih kolom-kolom yang akan digunakan untuk analisis KMeans
+        features_kmeans = ['Rata-rata Write IOPS', 'Rata-rata Read IOPS']
+        data_kmeans = data_unit_disk_space_iops_grouped[features_kmeans]
+
+        # Melakukan pengelompokkan menggunakan KMeans
+        kmeans = KMeans(n_clusters=optimal_clusters)
+        kmeans.fit(data_kmeans)
+
+        # Menambahkan kolom klaster ke DataFrame
+        data_unit_disk_space_iops_grouped['klaster'] = kmeans.labels_
+
+        # Mengambil nilai centroid
+        centroids = kmeans.cluster_centers_
+
+        # Visualisasi hasil pengelompokkan berdasarkan klaster baru
+        plt.scatter(data_unit_disk_space_iops_grouped['Rata-rata Write IOPS'], data_unit_disk_space_iops_grouped['Rata-rata Read IOPS'], c=data_unit_disk_space_iops_grouped['klaster'], cmap='viridis', label='Data Points')
+        plt.scatter(centroids[:, 0], centroids[:, 1], marker='x', color='red', label='Centroids')
+        plt.xlabel('Rata-rata Write IOPS')
+        plt.ylabel('Rata-rata Read IOPS')
+        plt.colorbar(label='Klaster')
+        plt.legend()
+        plt.title(f'Visualisasi Rata-rata Write IOPS dan Rata-rata Read IOPS dengan KMeans Centroids (Kluster = {optimal_clusters})')
+        plt.show()
+
+        # Menyimpan hasil klaster ke file CSV dengan nama yang mencakup jumlah kluster optimal
+        output_file_name = f'/content/drive/MyDrive/Colab Notebooks/hasil_klaster_disk_space_iops_{optimal_clusters}.csv'
+        data_unit_disk_space_iops_grouped.to_csv(output_file_name, index=False)
+
+        # Menghitung Davies Bouldin Score
+        dbi_score = davies_bouldin_score(data_kmeans, data_unit_disk_space_iops_grouped['klaster'])
+        print(f'Davies Bouldin Score untuk {optimal_clusters} kluster:', dbi_score)
+
+
+    ##############################################################
+
+    ## Grouping per Unit
+
+    # Baca data dari file Excel
+    df = pd.read_excel('/content/drive/MyDrive/Colab Notebooks/data_raw_2_tahun.xlsx')
+
+    # Hapus spasi ekstra dari nama kolom
+    df.columns = df.columns.str.strip()
+
+    # Hapus kolom 'Nomor', 'Nama Aplikasi', 'URL', dan 'Hostname'
+    df = df.drop(['Nomor', 'Nama Aplikasi', 'URL', 'Hostname'], axis=1)
+
+    # Hapus kolom yang memiliki awalan 'Sum of Datastore|Write IOPS' atau 'Sum of Datastore|Read IOPS'
+    df = df.drop(df.filter(like='Sum of Datastore|Write IOPS').columns, axis=1)
+    df = df.drop(df.filter(like='Sum of Datastore|Read IOPS').columns, axis=1)
+
+    # Ganti nama kolom dengan awalan 'Sum of Disk Space|Provisioned Space for VM (GB)'
+    df = df.rename(columns=lambda x: 'Total Disk Space' if 'Sum of Disk Space|Provisioned Space for VM (GB)' in x else x)
+
+    # Ganti nama kolom dengan awalan 'disk used'
+    df = df.rename(columns=lambda x: 'Total Disk Used' if 'disk used' in x else x)
+
+    # Mengelompokkan berdasarkan 'Unit' tanpa melakukan agregasi
+    grouped_df = df.groupby('Unit').sum().reset_index()
+
+    # Menampilkan beberapa baris pertama DataFrame setelah mengelompokkan
+    #print(grouped_df.head())
+
+    # Menyimpan DataFrame ke dalam file CSV
+    grouped_df.to_csv('/content/drive/MyDrive/Colab Notebooks/grouped_data.csv', index=False)
+
+    ## Membuat FIle CSV Unit Loop Untuk Total Disk Used & Prediction
+
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from sklearn.metrics import mean_squared_error
+
+    # List untuk menyimpan hasil RMSE dan Mean
+    rmse_results = []
+    mean_results = []
+
+    # DataFrame untuk menyimpan hasil RMSE tiap unit
+    rmse_df = pd.DataFrame(columns=['Unit', 'RMSE'])
+
+    # Loop untuk setiap Unit
+    for idx, unit_name in enumerate(grouped_df['Unit']):
+        # Mengambil data kolom ganjil untuk baris pertama mulai dari kolom ketiga
+        odd_columns_data = grouped_df.iloc[idx, 2::2]  # Mulai dari indeks 2 (kolom ketiga), langkah 2
+
+        # Menyimpan data ke dalam file dengan nama Unit
+        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'
+        odd_columns_data.to_csv(file_name, index=False)
+
+        # Membaca kembali file CSV
+        df_revised = pd.read_csv(file_name)
+
+        # Mengganti nama kolom pertama dengan 'Total Disk Used'
+        df_revised.columns.values[0] = 'Total Disk Used'
+
+        # Menyimpan kembali file CSV dengan nama kolom yang sudah diganti
+        df_revised.to_csv(file_name, index=False)
+
+        # Baca data dari file CSV yang telah direvisi
+        df_revised = pd.read_csv(file_name)
+
+        # Tambahkan kolom baru dengan nilai yang sesuai
+        df_revised['Date'] = pd.date_range(start='20220101', periods=len(df_revised), freq='MS').strftime('%Y%m%d')
+
+        # Pindahkan kolom 'Date' ke sebelah kiri
+        df_revised = df_revised[['Date'] + [col for col in df_revised if col != 'Date']]
+
+        # Menyimpan DataFrame kembali ke dalam file CSV
+        df_revised.to_csv(file_name, index=False)
+
+        # Pesan selesai setelah loop selesai
+        print(f"Selesai {unit_name}")
+
+        # Membaca kembali file CSV
+        df_revised = pd.read_csv(file_name, index_col='Date', parse_dates=True, skiprows=0)
+
+        # Menggunakan values untuk mendapatkan array satu dimensi
+        train = df_revised.iloc[0:13]
+        test = df_revised.iloc[12:]
+
+        fitted_model = ExponentialSmoothing(train['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()
+
+        test_predictions_hw = fitted_model.forecast(steps=12)
+
+        # Membuat DataFrame Pandas dari array NumPy
+        predictions_df = pd.DataFrame({
+            'Date': pd.date_range(start='2023-01-01', periods=12, freq='MS'),
+            'Predictions': test_predictions_hw
+        })
+
+        # Hitung RMSE
+        error_hw = mean_squared_error(test['Total Disk Used'], test_predictions_hw, squared=False)
+        rmse_results.append(error_hw)
+
+        # Hitung Mean
+        mean_value = test['Total Disk Used'].mean()
+        mean_results.append(mean_value)
+        print(f"Hasil RMSE untuk {unit_name}: {error_hw}")
+        print(f"Mean untuk {unit_name}: {mean_value}")
+
+        # Menambahkan hasil RMSE ke DataFrame
+        rmse_df = rmse_df.append({'Unit': unit_name, 'RMSE': error_hw}, ignore_index=True)
+
+        # Plotting train, test, dan predictions
+        plt.figure(figsize=(14, 8))
+        plt.plot(train.index, train['Total Disk Used'], label='Train')
+        plt.plot(test.index, test['Total Disk Used'], label='Test')
+        plt.plot(predictions_df['Date'], predictions_df['Predictions'], label='Predictions')
+        plt.xlabel('Date')
+        plt.ylabel('Total Disk Used')
+        plt.legend()
+        plt.title(f'Holt-Winters Forecast for {unit_name}')
+
+        # Menyimpan plot ke file gambar
+        plt.savefig(f'/content/drive/MyDrive/Colab Notebooks/Predictions_Plot_{unit_name}.png')
+        plt.close()
+
+        # Menyimpan hasil prediksi ke dalam file CSV
+        predictions_df.to_csv(f'/content/drive/MyDrive/Colab Notebooks/Predictions_{unit_name}.csv', index=False)
+
+    # Menyimpan hasil RMSE tiap unit ke dalam satu file CSV
+    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/Holt_RMSE_results.csv'
+    rmse_df.to_csv(rmse_csv_file, index=False)
+    print(f'Hasil RMSE tiap unit disimpan di: {rmse_csv_file}')
+
+
+    ###################################################################
+
+    # Membaca kembali file CSV untuk setiap unit
+    unit_dfs = []
+    for unit_name in grouped_df['Unit']:
+        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'
+        unit_df = pd.read_csv(file_name, index_col='Date', parse_dates=True)
+        unit_dfs.append(unit_df)
+
+    # Gabungkan data dari semua unit
+    total_df = pd.concat(unit_dfs, axis=1).sum(axis=1).to_frame(name='Total Disk Used')
+
+    #print(total_df)
+
+    ## Membagi Data menjadi Training dan Testing
+
+    # Menentukan indeks untuk pemisahan data training dan testing
+    split_index = int(len(total_df) * 0.5)  # Misalnya, menggunakan 80% data untuk training
+
+    # Memisahkan data menjadi training dan testing
+    train_total = total_df.iloc[:split_index]
+    test_total = total_df.iloc[split_index:]
+
+    ## Membuat Model dan Melakukan Prediksi pada Data Training
+
+    # Membuat model dan melakukan prediksi pada data training
+    final_model = ExponentialSmoothing(train_total['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()
+    train_predictions = final_model.fittedvalues
+
+    ## Melakukan Prediksi pada Data Testing
+
+    # Melakukan prediksi pada data testing
+    test_predictions = final_model.forecast(steps=len(test_total))
+
+    ## Menyimpan Hasil Prediksi Data Training dan Testing
+
+    # Membuat DataFrame Pandas dari array NumPy untuk data training
+    train_predictions_df = pd.DataFrame({
+        'Date': train_total.index,
+        'Predictions': train_predictions
+    })
+
+    # Menyimpan hasil prediksi data training ke dalam file CSV
+    train_predictions_df.to_csv('/content/drive/MyDrive/Colab Notebooks/Train_Predictions_Total_Unit.csv', index=False)
+
+    # Membuat DataFrame Pandas dari array NumPy untuk data testing
+    test_predictions_df = pd.DataFrame({
+        'Date': test_total.index,
+        'Predictions': test_predictions
+    })
+
+    # Menyimpan hasil prediksi data testing ke dalam file CSV
+    test_predictions_df.to_csv('/content/drive/MyDrive/Colab Notebooks/Test_Predictions_Total_Unit.csv', index=False)
+
+    ## Menampilkan Plot Data Training dan Testing
+
+    # Plotting data training dan testing
+    plt.figure(figsize=(14, 8))
+    plt.plot(train_total.index, train_total['Total Disk Used'], label='Train')
+    plt.plot(test_total.index, test_total['Total Disk Used'], label='Test')
+    plt.plot(train_predictions_df['Date'], train_predictions_df['Predictions'], label='Train Predictions')
+    plt.plot(test_predictions_df['Date'], test_predictions_df['Predictions'], label='Test Predictions')
+    plt.xlabel('Date')
+    plt.ylabel('Total Disk Used')
+    plt.legend()
+    plt.title('Holt-Winters Forecast for Total Unit')
+    plt.show()
+
+    ## Membuat Model Dan Prediksi
+
+    # Membuat model dan melakukan prediksi
+    final_model = ExponentialSmoothing(total_df['Total Disk Used'].values, trend='add', seasonal='add', seasonal_periods=6).fit()
+    forecast_predictions = final_model.forecast(steps=12)
+
+    # Menghitung RMSE
+    rmse_total = np.sqrt(mean_squared_error(test_total['Total Disk Used'], forecast_predictions))
+    print(f"Hasil RMSE untuk Total Unit: {rmse_total}")
+
+    # Menambahkan perhitungan mean
+    mean_total = total_df['Total Disk Used'].mean()
+    print(f"Mean dari Total Disk Used: {mean_total}")
+
+    ## Menyimpan hasil prediksi total unit ke dalam DataFrame dan file CSV
+
+    # Membuat DataFrame Pandas dari array NumPy
+    forecast_df_total = pd.DataFrame({
+        'Date': pd.date_range(start='2024-01-01', periods=12, freq='MS'),
+        'Predictions': forecast_predictions
+    })
+
+    # Menyimpan hasil prediksi total unit ke dalam file CSV
+    forecast_df_total.to_csv('/content/drive/MyDrive/Colab Notebooks/Predictions_Total_Unit.csv', index=False)
+
+    ## Plot Prediksi
+
+    # Plotting total unit
+    plt.figure(figsize=(14, 8))
+    total_df.plot(legend=True, label='Actual', figsize=(14, 8))
+    forecast_df_total.set_index('Date')['Predictions'].plot(legend=True, label='Holt Winters Forecast 1 year')
+    plt.xlabel('Date')
+    plt.ylabel('Total Disk Used')
+    plt.title('Holt-Winters Forecast for Total Unit')
+    plt.savefig('/content/drive/MyDrive/Colab Notebooks/Predictions_Plot_Total_Unit.png')
+    plt.show()
+
+    #############################################################
+
+    import pandas as pd
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import mean_squared_error
+    import matplotlib.pyplot as plt
+
+    # List untuk menyimpan hasil prediksi, RMSE, dan rumus regresi
+    results_list = []
+
+    # DataFrame untuk menyimpan hasil RMSE tiap unit
+    rmse_df = pd.DataFrame(columns=['Unit', 'Regresi RMSE'])
+
+    # Loop untuk setiap Unit
+    for idx, unit_name in enumerate(grouped_df['Unit']):
+        # Membaca data dari file CSV
+        file_name = f'/content/drive/MyDrive/Colab Notebooks/Disk Used {unit_name}.csv'
+        df = pd.read_csv(file_name)
+
+        # Tambahkan kolom 'Month' sebagai variabel independen (X)
+        df['Month'] = range(1, len(df) + 1)
+
+        # Pisahkan variabel independen (X) dan variabel dependen (y)
+        X = df[['Month']]
+        y = df['Total Disk Used']
+
+        # Inisialisasi model regresi linear
+        model = LinearRegression()
+
+        # Melatih model menggunakan data
+        model.fit(X, y)
+
+        # Membuat DataFrame untuk prediksi 12 bulan ke depan
+        next_months = pd.DataFrame({'Month': range(len(df) + 1, len(df) + 13)})
+        predictions = model.predict(next_months)
+
+        # Menambahkan hasil prediksi ke DataFrame
+        next_months['Total Disk Used Prediction'] = predictions
+
+        # Hitung RMSE
+        rmse_value = mean_squared_error(y, model.predict(X), squared=False)
+
+        # Menyimpan hasil RMSE ke DataFrame
+        rmse_df = rmse_df.append({'Unit': unit_name, 'Regresi RMSE': rmse_value}, ignore_index=True)
+
+        # Simpan hasil prediksi, RMSE, dan rumus regresi ke dalam list
+        results_list.append({
+            'unit_name': unit_name,
+            'predictions': predictions,
+            'rmse': rmse_value,
+            'regression_formula': f'y = {model.coef_[0]:.2f} * x + {model.intercept_:.2f}'
+        })
+
+        # Plotting data dan regresi linear
+        plt.scatter(df['Month'], y, label='Actual Data')
+        plt.plot(df['Month'], model.predict(X), color='red', label='Linear Regression')
+        plt.scatter(next_months['Month'], predictions, color='green', marker='x', label='Predictions for Next 12 Months')
+        plt.xlabel('Month')
+        plt.ylabel('Total Disk Used')
+        plt.legend()
+        plt.title(f'Linear Regression for {unit_name}')
+        plt.show()
+
+        # Simpan DataFrame yang berisi prediksi ke CSV
+        predictions_csv_file = f'/content/drive/MyDrive/Colab Notebooks/Predictions Regresi {unit_name}.csv'
+        next_months.to_csv(predictions_csv_file, index=False)
+
+    # Menyimpan hasil RMSE tiap unit ke dalam satu file CSV
+    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/RMSE_Results_Regresi.csv'
+    rmse_df.to_csv(rmse_csv_file, index=False)
+    print(f'Hasil RMSE tiap unit disimpan di: {rmse_csv_file}')
+
+    # Menampilkan hasil prediksi, RMSE, dan rumus regresi untuk setiap unit
+    for result in results_list:
+        print(f'Prediksi Total Disk Used untuk {result["unit_name"]}: {result["predictions"]}')
+        print(f'RMSE untuk {result["unit_name"]}: {result["rmse"]}')
+        print(f'Rumus Regresi untuk {result["unit_name"]}: {result["regression_formula"]}')
+
+
+    #############################################################
+
+    import pandas as pd
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import mean_squared_error
+    import matplotlib.pyplot as plt
+
+    # Tambahkan kolom 'Month' sebagai variabel independen (X)
+    total_df['Month'] = range(1, len(total_df) + 1)
+
+    # Pisahkan variabel independen (X) dan variabel dependen (y)
+    X = total_df[['Month']]
+    y = total_df['Total Disk Used']
+
+    # Inisialisasi model regresi linear
+    model = LinearRegression()
+
+    # Melatih model menggunakan data
+    model.fit(X, y)
+
+    # Membuat DataFrame untuk prediksi 12 bulan ke depan
+    next_months = pd.DataFrame({'Month': range(len(total_df) + 1, len(total_df) + 13)})
+
+    # Menggunakan indeks dari bulan terakhir pada total_df
+    last_month = total_df.index.max()
+    next_months.index = pd.date_range(start=last_month + pd.DateOffset(months=1), periods=12, freq='MS')
+
+    # Melakukan prediksi
+    next_months['Total Disk Used Prediction'] = model.predict(next_months[['Month']])
+
+    # Hitung RMSE
+    rmse_value = mean_squared_error(y, model.predict(X), squared=False)
+
+    # Simpan hasil RMSE ke DataFrame
+    rmse_df = pd.DataFrame({'Unit': ['Total'], 'Regresi RMSE': [rmse_value]})
+
+    # Plotting data dan regresi linear
+    plt.scatter(total_df.index, y, label='Actual Data')
+    plt.plot(total_df.index, model.predict(X), color='red', label='Linear Regression')
+    plt.scatter(next_months.index, next_months['Total Disk Used Prediction'], color='green', marker='x', label='Predictions for Next 12 Months')
+    plt.xlabel('Date')
+    plt.ylabel('Total Disk Used')
+    plt.legend()
+    plt.title('Linear Regression for Total Data')
+    plt.show()
+
+    # Menampilkan hasil prediksi, RMSE, dan rumus regresi
+    print(f'Prediksi Total Disk Used:\n{next_months}')
+    print(f'RMSE untuk Total Data: {rmse_value}')
+    print(f'Rumus Regresi untuk Total Data: y = {model.coef_[0]:.2f} * x + {model.intercept_:.2f}')
+
+    # Menyimpan hasil RMSE ke dalam satu file CSV
+    rmse_csv_file = '/content/drive/MyDrive/Colab Notebooks/RMSE_Results_Total_Regresi.csv'
+    rmse_df.to_csv(rmse_csv_file, index=False)
+    print(f'Hasil RMSE disimpan di: {rmse_csv_file}')
+
+    # Simpan hasil prediksi ke dalam file CSV
+    predictions_csv_file = '/content/drive/MyDrive/Colab Notebooks/Predictions_Regresi_Total.csv'
+    next_months.to_csv(predictions_csv_file, index=False)
+    print(f'Hasil prediksi disimpan di: {predictions_csv_file}')
+
+
+        # Add content for unit analysis
+
+    elif selected_page == "Total Analysis":
+        st.header("Total Analysis")
+
+        # Add content for total analysis
+
+if __name__ == "__main__":
+    main()
